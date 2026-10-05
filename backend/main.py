@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+from database import get_db
+from models import TimetableEntry
+
 
 app = FastAPI(
     title="Schedulix",
@@ -7,7 +12,11 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Allow frontend to communicate with backend
+
+# --------------------------------------------------
+# CORS
+# --------------------------------------------------
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,6 +26,10 @@ app.add_middleware(
 )
 
 
+# --------------------------------------------------
+# Root
+# --------------------------------------------------
+
 @app.get("/")
 def root():
     return {
@@ -25,6 +38,10 @@ def root():
     }
 
 
+# --------------------------------------------------
+# Health Check
+# --------------------------------------------------
+
 @app.get("/health")
 def health_check():
     return {
@@ -32,44 +49,28 @@ def health_check():
     }
 
 
+# --------------------------------------------------
+# Get Timetable
+# --------------------------------------------------
+
 @app.get("/api/timetable")
-def get_timetable():
-    """
-    Temporary timetable data.
+def get_timetable(db: Session = Depends(get_db)):
 
-    Later this will come from PostgreSQL
-    through SQLAlchemy.
-    """
+    entries = db.query(TimetableEntry).all()
 
-    timetable = [
-        {
-            "id": 1,
-            "day": "Monday",
-            "time": "10:00-11:00",
-            "subject": "Operating Systems",
-            "faculty": "Dr. Sharma",
-            "room": "C-301",
-            "section": "CSE-B"
-        },
-        {
-            "id": 2,
-            "day": "Monday",
-            "time": "11:00-12:00",
-            "subject": "DBMS",
-            "faculty": "Dr. Verma",
-            "room": "C-302",
-            "section": "CSE-B"
-        },
-        {
-            "id": 3,
-            "day": "Tuesday",
-            "time": "10:00-11:00",
-            "subject": "Computer Networks",
-            "faculty": "Dr. Singh",
-            "room": "C-301",
-            "section": "CSE-B"
-        }
-    ]
+    timetable = []
+
+    for entry in entries:
+
+        timetable.append({
+            "id": entry.id,
+            "day": entry.day,
+            "time": entry.time,
+            "subject": entry.subject,
+            "section": entry.section,
+            "faculty_id": entry.faculty_id,
+            "room_id": entry.room_id
+        })
 
     return {
         "count": len(timetable),
