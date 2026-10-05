@@ -5,16 +5,18 @@ from threading import Lock
 class ConflictEngine:
 
     def __init__(self):
-        # Shared resource lock
         self.lock = Lock()
 
+    # --------------------------------------------------
+    # Faculty conflict
+    # --------------------------------------------------
 
     def check_faculty(self, new_entry, existing_entries):
 
         for entry in existing_entries:
 
             if (
-                entry["faculty"] == new_entry["faculty"]
+                entry["faculty"] == new_entry["faculty_id"]
                 and entry["day"] == new_entry["day"]
                 and entry["time"] == new_entry["time"]
             ):
@@ -22,13 +24,16 @@ class ConflictEngine:
 
         return None
 
+    # --------------------------------------------------
+    # Room conflict
+    # --------------------------------------------------
 
     def check_room(self, new_entry, existing_entries):
 
         for entry in existing_entries:
 
             if (
-                entry["room"] == new_entry["room"]
+                entry["room"] == new_entry["room_id"]
                 and entry["day"] == new_entry["day"]
                 and entry["time"] == new_entry["time"]
             ):
@@ -36,6 +41,9 @@ class ConflictEngine:
 
         return None
 
+    # --------------------------------------------------
+    # Section conflict
+    # --------------------------------------------------
 
     def check_section(self, new_entry, existing_entries):
 
@@ -50,6 +58,9 @@ class ConflictEngine:
 
         return None
 
+    # --------------------------------------------------
+    # Run checks concurrently
+    # --------------------------------------------------
 
     def check_conflicts(self, new_entry, existing_entries):
 
@@ -90,25 +101,27 @@ class ConflictEngine:
         return conflicts
 
 
+# --------------------------------------------------
+# Test
+# --------------------------------------------------
+
 if __name__ == "__main__":
 
     engine = ConflictEngine()
 
     existing_entries = [
-
         {
             "subject": "Operating Systems",
-            "faculty": "Dr. Sharma",
-            "room": "C-301",
+            "faculty": 1,
+            "room": 1,
             "section": "CSE-A",
             "day": "Monday",
             "time": "10:00-11:00"
         },
-
         {
             "subject": "DBMS",
-            "faculty": "Dr. Verma",
-            "room": "C-302",
+            "faculty": 2,
+            "room": 2,
             "section": "CSE-B",
             "day": "Monday",
             "time": "11:00-12:00"
@@ -116,10 +129,9 @@ if __name__ == "__main__":
     ]
 
     new_entry = {
-
         "subject": "Computer Networks",
-        "faculty": "Dr. Sharma",
-        "room": "C-305",
+        "faculty_id": 1,
+        "room_id": 2,
         "section": "CSE-C",
         "day": "Monday",
         "time": "10:00-11:00"

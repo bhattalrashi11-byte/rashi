@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from database import get_db
 from models import TimetableEntry
+from schedule_service import ScheduleService
 
 
 app = FastAPI(
@@ -24,6 +26,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --------------------------------------------------
+# Request Schema
+# --------------------------------------------------
+
+class TimetableRequest(BaseModel):
+    day: str
+    time: str
+    subject: str
+    section: str
+    faculty_id: int
+    room_id: int
 
 
 # --------------------------------------------------
@@ -76,3 +91,29 @@ def get_timetable(db: Session = Depends(get_db)):
         "count": len(timetable),
         "timetable": timetable
     }
+
+
+# --------------------------------------------------
+# Create Timetable Entry
+# --------------------------------------------------
+
+@app.post("/api/timetable")
+def create_timetable_entry(
+    request: TimetableRequest,
+    db: Session = Depends(get_db)
+):
+
+    service = ScheduleService(db)
+
+    new_entry = {
+        "day": request.day,
+        "time": request.time,
+        "subject": request.subject,
+        "section": request.section,
+        "faculty_id": request.faculty_id,
+        "room_id": request.room_id
+    }
+
+    result = service.create_entry(new_entry)
+
+    return result
