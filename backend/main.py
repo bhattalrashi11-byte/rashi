@@ -17,7 +17,7 @@ from schedule_service import ScheduleService
 app = FastAPI(
     title="Schedulix API",
     description="Intelligent Academic Timetable Scheduling System",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -48,6 +48,18 @@ class SchedulingRequestCreate(BaseModel):
     required_capacity: int = Field(default=1, ge=1)
 
 
+def validate_algorithm(algorithm: str) -> str:
+    algorithm = algorithm.upper()
+
+    if algorithm not in ("PRIORITY", "SJF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Algorithm must be PRIORITY or SJF.",
+        )
+
+    return algorithm
+
+
 @app.get("/")
 def home():
     return {
@@ -63,7 +75,14 @@ def health_check():
 
 @app.get("/api/timetable")
 def get_timetable(db: Session = Depends(get_db)):
-    entries = db.query(TimetableEntry).all()
+    entries = (
+        db.query(TimetableEntry)
+        .order_by(
+            TimetableEntry.day,
+            TimetableEntry.time,
+        )
+        .all()
+    )
 
     return [
         {
@@ -178,7 +197,11 @@ def create_scheduling_request(
 def get_scheduling_requests(
     db: Session = Depends(get_db),
 ):
-    requests = db.query(SchedulingRequest).all()
+    requests = (
+        db.query(SchedulingRequest)
+        .order_by(SchedulingRequest.id)
+        .all()
+    )
 
     return [
         {
@@ -199,12 +222,11 @@ def get_scheduling_requests(
 
 @app.post("/api/timetable/generate")
 def generate_timetable(
-    algorithm: str = Query(
-        default="PRIORITY",
-        pattern="^(PRIORITY|SJF)$",
-    ),
+    algorithm: str = Query(default="PRIORITY"),
     db: Session = Depends(get_db),
 ):
+    algorithm = validate_algorithm(algorithm)
+
     try:
         service = ScheduleService(db)
         return service.generate_timetable(algorithm=algorithm)
@@ -222,9 +244,40 @@ def generate_timetable(
         )
 
 
+@app.post("/api/timetable/save")
+def save_timetable(
+    algorithm: str = Query(default="PRIORITY"),
+    db: Session = Depends(get_db),
+):
+    algorithm = validate_algorithm(algorithm)
+
+    try:
+        service = ScheduleService(db)
+        result = service.save_generated_timetable(
+            algorithm=algorithm
+        )
+
+        return result
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Timetable could not be saved. "
+                "The database transaction was rolled back."
+            ),
+        )
+
+
 @app.get("/api/faculty")
 def get_faculty(db: Session = Depends(get_db)):
-    faculty = db.query(Faculty).all()
+    faculty = db.query(Faculty).order_by(Faculty.id).all()
 
     return [
         {
@@ -238,7 +291,7 @@ def get_faculty(db: Session = Depends(get_db)):
 
 @app.get("/api/rooms")
 def get_rooms(db: Session = Depends(get_db)):
-    rooms = db.query(Room).all()
+    rooms = db.query(Room).order_by(Room.id).all()
 
     return [
         {
