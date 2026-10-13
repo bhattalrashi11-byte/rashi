@@ -1,75 +1,99 @@
 from sqlalchemy.orm import Session
 
-from models import TimetableEntry
-from conflict_engine import ConflictEngine
+from models import (
+    Faculty,
+    Room,
+    TimetableEntry,
+    SchedulingRequest,
+)
+from scheduler import TimetableScheduler
 
 
 class ScheduleService:
-
     def __init__(self, db: Session):
         self.db = db
-        self.conflict_engine = ConflictEngine()
+        self.scheduler = TimetableScheduler()
 
-    def get_existing_entries(self):
+    def generate_timetable(self, algorithm: str = "PRIORITY"):
+        """
+        Generate a timetable preview from database records.
 
-        entries = self.db.query(TimetableEntry).all()
+        This method does not save generated entries to the database.
+        It only returns the proposed timetable for validation.
+        """
 
-        result = []
+        # 1. Fetch scheduling requirements
+        requests_db = (
+            self.db.query(SchedulingRequest)
+            .filter(SchedulingRequest.status == "pending")
+            .all()
+        )
 
-        for entry in entries:
+        # 2. Fetch available faculty and rooms
+        faculty_db = self.db.query(Faculty).all()
+        rooms_db = self.db.query(Room).all()
 
-            result.append({
-                "id": entry.id,
-                "subject": entry.subject,
-                "faculty": entry.faculty_id,
-                "room": entry.room_id,
-                "section": entry.section,
+        # 3. Fetch already occupied timetable slots
+        existing_db = self.db.query(TimetableEntry).all()
+
+        # 4. Convert scheduling requests into dictionaries
+        requests = [
+            {
+                "id": request.id,
+                "subject": request.subject,
+                "section": request.section,
+                "faculty_id": request.faculty_id,
+                "sessions_per_week": request.sessions_per_week,
+                "slots_required": request.slots_required,
+                "priority": request.priority,
+                "required_capacity": request.required_capacity,
+            }
+            for request in requests_db
+        ]
+
+        # 5. Convert faculty into dictionaries
+        faculty = [
+            {"id": member.id}
+            for member in faculty_db
+        ]
+
+        # 6. Convert rooms into dictionaries
+        rooms = [
+            {
+                "id": room.id,
+                "room_number": room.room_number,
+                "capacity": room.capacity,
+            }
+            for room in rooms_db
+        ]
+
+        # 7. Convert existing timetable entries
+        existing_entries = [
+            {
                 "day": entry.day,
-                "time": entry.time
-            })
+                "time": entry.time,
+                "section": entry.section,
+                "faculty_id": entry.faculty_id,
+                "room_id": entry.room_id,
+            }
+            for entry in existing_db
+        ]
+
+        # 8. Generate a timetable using the selected algorithm
+        result = self.scheduler.generate(
+            requests=requests,
+            faculty=faculty,
+            rooms=rooms,
+            existing_entries=existing_entries,
+            algorithm=algorithm,
+        )
+
+        # 9. Return a preview without modifying the database
+        result["mode"] = "preview"
+        result["message"] = (
+            "Timetable generated successfully."
+            if result["unscheduled_count"] == 0
+            else "Timetable generated with some unscheduled sessions."
+        )
 
         return result
-
-
-    def check_assignment(self, new_entry):
-
-        existing_entries = self.get_existing_entries()
-
-        conflicts = self.conflict_engine.check_conflicts(
-            new_entry,
-            existing_entries
-        )
-
-        return conflicts
-
-
-    def create_entry(self, new_entry):
-
-        conflicts = self.check_assignment(new_entry)
-
-        if conflicts:
-
-            return {
-                "success": False,
-                "message": "Timetable conflict detected",
-                "conflicts": conflicts
-            }
-
-        entry = TimetableEntry(
-            day=new_entry["day"],
-            time=new_entry["time"],
-            subject=new_entry["subject"],
-            section=new_entry["section"],
-            faculty_id=new_entry["faculty_id"],
-            room_id=new_entry["room_id"]
-        )
-
-        self.db.add(entry)
-        self.db.commit()
-        self.db.refresh(entry)
-
-        return {
-            "success": True,
-            "message": "Timetable entry created",
-            "entry_id": entry.id
-        }
