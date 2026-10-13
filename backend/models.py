@@ -1,4 +1,11 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    ForeignKey,
+    UniqueConstraint,
+    CheckConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -16,6 +23,11 @@ class Faculty(Base):
         back_populates="faculty"
     )
 
+    scheduling_requests = relationship(
+        "SchedulingRequest",
+        back_populates="faculty"
+    )
+
 
 class Room(Base):
     __tablename__ = "rooms"
@@ -27,6 +39,83 @@ class Room(Base):
     timetable_entries = relationship(
         "TimetableEntry",
         back_populates="room"
+    )
+
+
+class SchedulingRequest(Base):
+    """
+    Stores classes that need to be scheduled.
+
+    Each request can require multiple sessions per week.
+    The scheduler will convert these requirements into
+    actual timetable entries.
+    """
+
+    __tablename__ = "scheduling_requests"
+
+    id = Column(Integer, primary_key=True)
+
+    subject = Column(String(100), nullable=False)
+    section = Column(String(50), nullable=False)
+
+    faculty_id = Column(
+        Integer,
+        ForeignKey("faculty.id"),
+        nullable=False
+    )
+
+    sessions_per_week = Column(
+        Integer,
+        nullable=False,
+        default=1
+    )
+
+    slots_required = Column(
+        Integer,
+        nullable=False,
+        default=1
+    )
+
+    priority = Column(
+        Integer,
+        nullable=False,
+        default=3
+    )
+
+    required_capacity = Column(
+        Integer,
+        nullable=False,
+        default=1
+    )
+
+    status = Column(
+        String(20),
+        nullable=False,
+        default="pending"
+    )
+
+    faculty = relationship(
+        "Faculty",
+        back_populates="scheduling_requests"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "sessions_per_week >= 1",
+            name="check_sessions_per_week"
+        ),
+        CheckConstraint(
+            "slots_required >= 1",
+            name="check_slots_required"
+        ),
+        CheckConstraint(
+            "priority >= 1",
+            name="check_priority"
+        ),
+        CheckConstraint(
+            "required_capacity >= 1",
+            name="check_required_capacity"
+        ),
     )
 
 
@@ -63,8 +152,6 @@ class TimetableEntry(Base):
         back_populates="timetable_entries"
     )
 
-    # Prevent the same faculty or room
-    # from being assigned twice to the same slot.
     __table_args__ = (
         UniqueConstraint(
             "faculty_id",
